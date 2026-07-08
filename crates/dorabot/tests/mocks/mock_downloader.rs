@@ -185,7 +185,7 @@ impl MockDownloaderStats {
             failure_rate: if total > 0 { failed as f64 / total as f64 } else { 0.0 },
             timeout_rate: if total > 0 { timeouts as f64 / total as f64 } else { 0.0 },
             total_bytes,
-            avg_duration_ms: if total > 0 { total_duration / total } else { 0 },
+            avg_duration_ms: total_duration.checked_div(total).unwrap_or(0),
             min_duration_ms: if min_duration == u64::MAX { 0 } else { min_duration },
             max_duration_ms: max_duration,
         }
