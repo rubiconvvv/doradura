@@ -199,6 +199,19 @@ pub async fn run_bot(use_webhook: bool) -> Result<()> {
 
     let result = if let Some(url) = webhook_url {
         log::info!("Webhook mode requested with public URL {}", url);
+        // Bring up the WhatsApp adapter if its secrets are configured; it mounts
+        // its webhook on the same axum server and drains inbound messages via a
+        // background consumer. Disabled (None) = zero change to the Telegram bot.
+        let whatsapp_router = match crate::whatsapp::init() {
+            Some(rt) => {
+                crate::whatsapp::spawn_inbound_consumer(rt.rx, rt.messenger);
+                Some(rt.router)
+            }
+            None => {
+                log::info!("WhatsApp adapter disabled (WHATSAPP_* secrets not set)");
+                None
+            }
+        };
         crate::webhook::run_webhook_mode(
             bot,
             handler,
@@ -207,9 +220,13 @@ pub async fn run_bot(use_webhook: bool) -> Result<()> {
             bot_id,
             bot_username.map(|s| s.to_string()).unwrap_or_default(),
             bot_init_start,
+            whatsapp_router,
         )
         .await
     } else {
+        if crate::whatsapp::is_configured() {
+            log::warn!("WhatsApp adapter configured but requires webhook mode (WEBHOOK_URL unset); skipping");
+        }
         run_polling_mode(bot, handler, bot_init_start, Arc::clone(&shared_storage)).await
     };
 

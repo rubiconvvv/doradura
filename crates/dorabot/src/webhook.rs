@@ -84,6 +84,7 @@ pub async fn run_webhook_mode(
     bot_id: UserId,
     bot_username: String,
     bot_init_start: std::time::Instant,
+    whatsapp_router: Option<axum::Router>,
 ) -> Result<()> {
     let public_url = config::WEBHOOK_URL
         .clone()
@@ -124,6 +125,15 @@ pub async fn run_webhook_mode(
         },
         dedup_middleware,
     ));
+
+    // WhatsApp webhook (when the adapter is enabled) rides the same axum app and
+    // port, but is merged OUTSIDE the Telegram dedup layer above: it has its own
+    // `X-Hub-Signature-256` verification and carries no Telegram secret-token
+    // header, so it must not pass through `dedup_middleware`.
+    let app = match whatsapp_router {
+        Some(wa) => app.merge(wa),
+        None => app,
+    };
 
     let server = tokio::spawn(async move {
         let tcp_listener = tokio::net::TcpListener::bind(listen_addr)
